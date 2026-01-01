@@ -1,0 +1,39 @@
+# ChitChat Local Development Stack
+# Usage: docker compose up -d
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: chitchat-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: run the app in Docker (or run locally with npm run dev)
+  app:
+    build: .
+    container_name: chitchat-app
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      - PORT=${PORT:-3000}
+      - SERVER_ID=docker
+      - REDIS_URL=redis://redis:6379
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - TRUST_PROXY=true
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - full  # Only starts with: docker compose --profile full up
+
+volumes:
+  redis-data:

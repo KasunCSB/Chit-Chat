@@ -1,0 +1,42 @@
+{
+  "name": "chit-chat",
+  "version": "1.0.0",
+  "description": "Temporary chat rooms with human-readable passphrases.",
+  "author": "KasunCSB",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "NODE_ENV=production node src/server.js",
+    "smoke": "node scripts/smoke-runner.js",
+    "docker:redis": "docker run --rm -d -p 6379:6379 --name chitchat-redis redis:7-alpine",
+    "docker:redis:stop": "docker stop chitchat-redis || true"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "chat",
+    "real-time",
+    "websocket",
+    "socket.io",
+    "redis",
+    "temporary",
+    "passphrase"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KasunCSB/chit-chat.git"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^4.19.2",
+    "ioredis": "^5.5.0",
+    "nanoid": "^5.1.5",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  }
+}
