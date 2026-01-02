@@ -1228,4 +1228,9 @@ window.kickMember = kickMember;
 window.promoteMember = promoteMember;
 
 // Start the application
-document.addEventListener('DOMContentLoaded', init);
+// Check if DOM already loaded (since app.js loads dynamically after socket.io)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
