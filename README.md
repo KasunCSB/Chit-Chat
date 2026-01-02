@@ -1,12 +1,19 @@
 # Chit-Chat
 
-> Temporary chat rooms with human-readable passphrases
+<p align="center">
+  <img src="public/images/logo.png" alt="Chit-Chat Logo" width="120">
+</p>
 
+<p align="center">
+  <strong>Temporary chat rooms with human-readable passphrases</strong>
+</p>
 
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-blue)](https://socket.io/)
-[![Redis](https://img.shields.io/badge/Redis-7.x-red)](https://redis.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+<p align="center">
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18%2B-green" alt="Node.js"></a>
+  <a href="https://socket.io/"><img src="https://img.shields.io/badge/Socket.IO-4.x-blue" alt="Socket.IO"></a>
+  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-7.x-red" alt="Redis"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"></a>
+</p>
 
 ## Features
 
