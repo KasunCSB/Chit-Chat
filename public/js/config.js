@@ -7,12 +7,13 @@
 (function() {
   const host = window.location.hostname;
   
-  // Production: Firebase → nginx load balancer
+  // Primary: Firebase frontend → backend API
   if (host === 'chit-chat.web.app' || host === 'chit-chat.firebaseapp.com') {
-    window.CHITCHAT_API_URL = 'http://161.118.201.185';
+    window.CHITCHAT_API_URL = 'https://cc.kasunc.live';
   }
-  // Local development: same origin
+  // Fallback: Direct backend access (serves both FE + BE)
+  // Includes: cc.kasunc.live, localhost, any direct IP access
   else {
-    window.CHITCHAT_API_URL = '';
+    window.CHITCHAT_API_URL = '';  // Same origin
   }
 })();

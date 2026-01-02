@@ -20,39 +20,62 @@
 
 ## Live Demo
 
-- **Frontend**: [chit-chat.web.app](https://chit-chat.web.app)
-- **Backend**: nginx load balancer → Azure VM / Oracle VM
+- **Primary**: [chit-chat.web.app](https://chit-chat.web.app) (Firebase + backend)
+- **Fallback**: [cc.kasunc.live](https://cc.kasunc.live) (Direct backend)
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                           Users                            │
-│                    chit-chat.web.app                        │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-               ┌──────────────┴──────────────┐
-               │                             │
-        ┌──────┴──────┐              ┌──────┴──────┐
-        │   Firebase   │              │  Oracle VM  │
-        │   Hosting    │              │   nginx     │
-        │  (Frontend)  │              │ (Load Bal.) │
-        └──────────────┘              └──────┬───────┘
+                         ┌─────────────────────────────────────┐
+                         │              Users                  │
+                         └─────────────────┬───────────────────┘
                                            │
-                            ┌─────────────┴─────────────┐
-                            │                           │
-                      ┌─────┴─────┐           ┌─────┴─────┐
-                      │  Azure VM  │           │ Oracle VM │
-                      │  (Primary) │           │ (Backup)  │
-                      └─────┬──────┘           └─────┬─────┘
-                            │                       │
-                            └───────────┬───────────┘
-                                        │
-                               ┌────────┴────────┐
-                               │   Azure Redis   │
-                               │   (Shared)      │
-                               └─────────────────┘
+                    ┌──────────────────────┼──────────────────────┐
+                    │ Primary                          Fallback   │
+                    ▼                                             ▼
+          ┌─────────────────┐                           ┌─────────────────┐
+          │    Firebase     │                           │  cc.kasunc.live │
+          │    Hosting      │                           │   (Direct)      │
+          │   (Frontend)    │                           └────────┬────────┘
+          └────────┬────────┘                                    │
+                   │ API calls                                   │
+                   └───────────────────────┼─────────────────────┘
+                                           │
+                                           ▼
+                                 ┌─────────────────┐
+                                 │   Cloudflare    │
+                                 │   (Edge/SSL)    │
+                                 └────────┬────────┘
+                                          │
+                                          ▼
+                                 ┌─────────────────┐
+                                 │   Oracle VM     │
+                                 │   (nginx LB)    │
+                                 └────────┬────────┘
+                                          │
+                          ┌───────────────┴───────────────┐
+                          │                               │
+                          ▼                               ▼
+                 ┌─────────────────┐             ┌─────────────────┐
+                 │   Azure VM 1    │             │   Azure VM 2    │
+                 │   (App Server)  │             │   (App Server)  │
+                 └────────┬────────┘             └────────┬────────┘
+                          │                               │
+                          └───────────────┬───────────────┘
+                                          │
+                                          ▼
+                                 ┌─────────────────┐
+                                 │  Azure Redis    │
+                                 │  (Shared State) │
+                                 └─────────────────┘
 ```
+
+### Access URLs
+
+| URL | Path | Use Case |
+|-----|------|----------|
+| `chit-chat.web.app` | Firebase → API to cc.kasunc.live | Primary |
+| `cc.kasunc.live` | Direct to backend (serves FE + API) | Fallback if Firebase down |
 
 ## Quick Start
 
@@ -167,10 +190,12 @@ npm run smoke
 
 | Component | Service |
 |-----------|--------|
-| Frontend | Firebase Hosting |
-| Load Balancer | nginx on Oracle VM |
-| App Servers | Azure VM + Oracle VM |
-| Database | Azure Cache for Redis |
+| Frontend | Firebase Hosting (`chit-chat.web.app`) |
+| Edge/SSL | Cloudflare (Free tier) |
+| Load Balancer | nginx on Oracle Cloud VM |
+| App Servers | 2x Azure VMs (round-robin) |
+| Database | Azure Cache for Redis (Standard C0) |
+| Domain | `cc.kasunc.live` (Cloudflare DNS) |
 
 ### Deploy to VMs
 

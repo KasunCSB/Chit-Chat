@@ -144,12 +144,16 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Health check endpoint
+// ============================================================================
+// Health Endpoints (for load balancer health checks)
+// ============================================================================
+
+// Basic health check (fast, no dependencies)
 app.get('/healthz', (req, res) => {
   res.json({ ok: true, serverId: SERVER_ID, redis: redis.status, ts: nowMs() });
 });
 
-// Readiness check (used by load balancers when you need Redis to be reachable)
+// Readiness check (checks Redis connectivity)
 app.get('/readyz', async (req, res) => {
   try {
     await Promise.race([
@@ -160,6 +164,37 @@ app.get('/readyz', async (req, res) => {
   } catch (err) {
     res.status(503).json({ ok: false, serverId: SERVER_ID, error: 'Redis unavailable' });
   }
+});
+
+// Server info (for aggregation by load balancer)
+app.get('/api/server-info', async (req, res) => {
+  let redisOk = false;
+  let redisLatency = null;
+  try {
+    const start = Date.now();
+    await Promise.race([
+      redis.ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ]);
+    redisLatency = Date.now() - start;
+    redisOk = true;
+  } catch (e) {}
+
+  let activeRooms = 0;
+  try {
+    const keys = await redis.keys('room:*:meta');
+    activeRooms = keys.length;
+  } catch (e) {}
+
+  res.json({
+    serverId: SERVER_ID,
+    status: redisOk ? 'healthy' : 'degraded',
+    uptime: Math.floor(process.uptime()),
+    memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    redis: { connected: redisOk, latency: redisLatency },
+    clients: io.engine.clientsCount || 0,
+    rooms: activeRooms,
+  });
 });
 
 // Generate options for user/room setup
