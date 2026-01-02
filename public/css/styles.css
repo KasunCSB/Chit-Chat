@@ -953,6 +953,15 @@ input[type="text"]::placeholder {
   border-color: var(--primary-light);
 }
 
+.member-chip.reconnecting {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.member-chip.reconnecting .avatar {
+  filter: grayscale(50%);
+}
+
 .waiting-note {
   display: flex;
   align-items: center;
@@ -1106,6 +1115,51 @@ input[type="text"]::placeholder {
 @keyframes bannerSlide {
   from { opacity: 0; transform: translateY(-100%); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Connection Status Bar - shows during reconnection */
+.connection-status {
+  display: none;
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: center;
+  background: var(--warning-soft);
+  color: var(--warning);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.connection-status.visible {
+  display: flex;
+}
+
+.connection-status .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Disabled state for chat input during reconnection */
+.chat-input-wrapper.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.chat-input-wrapper.disabled .chat-input {
+  background: var(--bg-muted);
+}
+
+.chat-input-wrapper.disabled .send-btn {
+  cursor: not-allowed;
 }
 
 /* Chat Messages Area */
@@ -1546,6 +1600,36 @@ input[type="text"]::placeholder {
 .btn-kick:hover {
   background: var(--error);
   color: var(--text-inverse);
+}
+
+/* Reconnecting member status */
+.sidebar-member.reconnecting {
+  opacity: 0.6;
+}
+
+.sidebar-member.reconnecting .avatar {
+  filter: grayscale(50%);
+}
+
+.sidebar-member-status {
+  font-size: 0.625rem;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-member-status .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 /* ==========================================================================

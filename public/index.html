@@ -395,6 +395,12 @@
           <span></span>
         </div>
 
+        <!-- Connection status bar - shows during reconnection -->
+        <div id="connection-status" class="connection-status">
+          <div class="spinner"></div>
+          <span>Reconnecting to server...</span>
+        </div>
+
         <div id="chat-messages" class="chat-messages"></div>
 
         <div id="typing-indicator" class="typing-indicator">
@@ -408,14 +414,16 @@
           </div>
         </div>
 
-        <div class="chat-input">
-          <input type="text" id="message-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
-          <button id="btn-send" class="btn-send" title="Send">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 2L11 13"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
-            </svg>
-          </button>
+        <div id="chat-input-wrapper" class="chat-input-wrapper">
+          <div class="chat-input">
+            <input type="text" id="message-input" placeholder="Type a message..." maxlength="500" autocomplete="off">
+            <button id="btn-send" class="btn-send" title="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 2L11 13"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 

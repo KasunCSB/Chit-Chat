@@ -448,13 +448,16 @@ async function refreshRoomTTL(roomId) {
   await pipeline.exec();
 }
 
-// Helper: Get all members
+// Helper: Get all members (with connection status for UI)
 async function getMembers(roomId) {
   const membersData = await redis.hgetall(keys.members(roomId));
   const members = [];
   for (const [_memberId, json] of Object.entries(membersData)) {
     try {
-      members.push(JSON.parse(json));
+      const member = JSON.parse(json);
+      // Add connection status for UI
+      member.status = (member.disconnectedAt && !member.odId) ? 'reconnecting' : 'connected';
+      members.push(member);
     } catch {}
   }
   return members;
@@ -574,10 +577,13 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Update the socket ID for this member (odId = operational connection ID)
+      // Update the socket ID and clear disconnected status (successful reconnection!)
       member.odId = socket.id;
+      member.disconnectedAt = null; // Clear disconnect timestamp - member is back!
       await redis.hset(keys.members(roomId), memberId, JSON.stringify(member));
       await refreshRoomTTL(roomId);
+      
+      console.log(`[${SERVER_ID}] Member ${member.name} rejoined room ${roomId} after failover`);
 
       socket.data.roomId = roomId;
       socket.data.memberId = memberId;
@@ -1114,7 +1120,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle disconnect
+  // Handle disconnect - use grace period for HA (allows reconnection during failover)
   socket.on('disconnect', async () => {
     // Safely extract socket data with proper null checks
     if (!socket.data) {
@@ -1127,61 +1133,81 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Use a safe name for notifications
     const safeMemberName = memberName || 'Someone';
+    const RECONNECT_GRACE_SECONDS = 30; // Allow 30s for reconnection
 
     try {
-      // Remove from members
-      await redis.hdel(keys.members(roomId), memberId);
-      await redis.hdel(keys.typing(roomId), memberId);
-
-      // Get remaining members
-      const members = await getMembers(roomId);
-
-      if (members.length === 0) {
-        // Room is empty, could clean up or let TTL handle it
-        systemNotice(roomId, 'Everyone left. Room will expire after inactivity.', 'info');
-      } else {
-        // Notify others
-        socket.to(roomId).emit('member:left', { memberId, name: safeMemberName });
-        socket.to(roomId).emit('room:notice', {
-          message: `${safeMemberName} left`,
-          type: 'leave',
-          ts: nowMs(),
-        });
-
-        // If admin left, rotate admin to earliest joined member
-        if (memberRole === 'admin' && members.length > 0) {
-          // Filter out any invalid members before sorting
-          const validMembers = members.filter(m => m && m.id && typeof m.joinedAt === 'number');
+      // Mark member as disconnected but DON'T remove yet (grace period for HA)
+      const memberData = await redis.hget(keys.members(roomId), memberId);
+      if (memberData) {
+        try {
+          const member = JSON.parse(memberData);
+          member.disconnectedAt = nowMs();
+          member.odId = null; // Clear socket ID
+          await redis.hset(keys.members(roomId), memberId, JSON.stringify(member));
           
-          if (validMembers.length > 0) {
-            const sortedMembers = validMembers.sort((a, b) => a.joinedAt - b.joinedAt);
-            const newAdmin = sortedMembers[0];
-            newAdmin.role = 'admin';
-            await redis.hset(keys.members(roomId), newAdmin.id, JSON.stringify(newAdmin));
-
-            const room = await getRoom(roomId);
-            if (room) {
-              room.adminId = newAdmin.id;
-              await saveRoom(room);
+          // Schedule cleanup after grace period
+          setTimeout(async () => {
+            try {
+              const currentData = await redis.hget(keys.members(roomId), memberId);
+              if (currentData) {
+                const current = JSON.parse(currentData);
+                // Only remove if still disconnected (not reconnected)
+                if (current.disconnectedAt && !current.odId) {
+                  console.log(`[${SERVER_ID}] Grace period expired for ${safeMemberName}, removing from room`);
+                  await redis.hdel(keys.members(roomId), memberId);
+                  await redis.hdel(keys.typing(roomId), memberId);
+                  
+                  // Notify others
+                  io.to(roomId).emit('member:left', { memberId, name: safeMemberName });
+                  io.to(roomId).emit('room:notice', {
+                    message: `${safeMemberName} left`,
+                    type: 'leave',
+                    ts: nowMs(),
+                  });
+                  
+                  // Handle admin rotation if needed
+                  const members = await getMembers(roomId);
+                  if (memberRole === 'admin' && members.length > 0) {
+                    const validMembers = members.filter(m => m && m.id && !m.disconnectedAt);
+                    if (validMembers.length > 0) {
+                      const sortedMembers = validMembers.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+                      const newAdmin = sortedMembers[0];
+                      newAdmin.role = 'admin';
+                      await redis.hset(keys.members(roomId), newAdmin.id, JSON.stringify(newAdmin));
+                      
+                      const room = await getRoom(roomId);
+                      if (room) {
+                        room.adminId = newAdmin.id;
+                        await saveRoom(room);
+                      }
+                      
+                      io.to(roomId).emit('member:promoted', { memberId: newAdmin.id, name: newAdmin.name });
+                      io.to(roomId).emit('room:admin-changed', { adminId: newAdmin.id, adminName: newAdmin.name });
+                      systemNotice(roomId, `${newAdmin.name} is now the admin`, 'promote');
+                    }
+                  }
+                  
+                  await broadcastMembers(roomId);
+                }
+              }
+            } catch (cleanupErr) {
+              console.error('Grace period cleanup error:', cleanupErr);
             }
-
-            const newAdminSocket = io.sockets.sockets.get(newAdmin.odId);
-            if (newAdminSocket) {
-              newAdminSocket.data.memberRole = 'admin';
-              newAdminSocket.emit('member:promoted', { memberId: newAdmin.id, name: newAdmin.name });
-            }
-
-            systemNotice(roomId, `${newAdmin.name} is now the admin (previous admin left)`, 'promote');
-            io.to(roomId).emit('room:admin-changed', { adminId: newAdmin.id, adminName: newAdmin.name });
-            io.to(roomId).emit('admin:changed', { newAdminId: newAdmin.id, newAdminName: newAdmin.name });
-          }
+          }, RECONNECT_GRACE_SECONDS * 1000);
+          
+        } catch (parseErr) {
+          console.error('Failed to parse member data on disconnect:', parseErr);
         }
-
-        await broadcastMembers(roomId);
-        await broadcastTyping(roomId);
       }
+
+      // Clear typing immediately
+      await redis.hdel(keys.typing(roomId), memberId);
+      await broadcastTyping(roomId);
+      
+      // Broadcast updated members (shows as "reconnecting" status)
+      await broadcastMembers(roomId);
+      
     } catch (err) {
       console.error('Disconnect handler error:', err);
     }

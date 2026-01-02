@@ -292,6 +292,8 @@ const elements = {
   chatRoomName: document.getElementById('chat-room-name'),
   chatMemberCount: document.getElementById('chat-member-count'),
   chatBanner: document.getElementById('chat-banner'),
+  connectionStatus: document.getElementById('connection-status'),
+  chatInputWrapper: document.getElementById('chat-input-wrapper'),
   chatMessages: document.getElementById('chat-messages'),
   typingIndicator: document.getElementById('typing-indicator'),
   typingText: document.getElementById('typing-text'),
@@ -340,6 +342,9 @@ function initSocket() {
     console.log('Connected to server');
     state.connected = true;
     
+    // Hide reconnecting UI
+    hideConnectionStatus();
+    
     // If we were in a room, try to rejoin (failover scenario)
     if (state.roomId && state.memberId) {
       console.log('Reconnecting to room after failover...');
@@ -355,10 +360,25 @@ function initSocket() {
   state.socket.on('disconnect', () => {
     console.log('Disconnected from server');
     state.connected = false;
-    // Show reconnecting indicator if in chat
-    if (elements.chat.classList.contains('active')) {
-      showBanner('Connection lost. Reconnecting...', 'warning');
+    // Show reconnecting indicator if in chat or waiting room
+    if (elements.chat.classList.contains('active') || elements.waiting.classList.contains('active')) {
+      showConnectionStatus();
     }
+  });
+
+  // Reconnect attempt
+  state.socket.io.on('reconnect_attempt', (attempt) => {
+    console.log(`Reconnection attempt ${attempt}/10...`);
+    if (elements.connectionStatus) {
+      elements.connectionStatus.querySelector('span').textContent = `Reconnecting... (attempt ${attempt}/10)`;
+    }
+  });
+
+  // Reconnect failed
+  state.socket.io.on('reconnect_failed', () => {
+    console.log('Reconnection failed');
+    hideConnectionStatus();
+    showError('Failed to reconnect. Please refresh the page.');
   });
 
   // Room joined (both create and join)
@@ -705,20 +725,24 @@ function updateWaitingRoom() {
 }
 
 function renderMembers() {
-  // Update counts
-  const count = state.members.length;
+  // Update counts (only connected members)
+  const connectedMembers = state.members.filter(m => m.status !== 'reconnecting');
+  const count = connectedMembers.length;
+  const totalCount = state.members.length;
+  
   elements.memberCount.textContent = count;
-  elements.chatMemberCount.textContent = `${count} member${count !== 1 ? 's' : ''}`;
+  elements.chatMemberCount.textContent = `${count} member${count !== 1 ? 's' : ''}${totalCount > count ? ` (${totalCount - count} reconnecting)` : ''}`;
   
   // Waiting room members list
   elements.membersList.innerHTML = state.members.map(member => {
     const isYou = member.id === state.memberId;
     const isAdmin = member.role === 'admin';
+    const isReconnecting = member.status === 'reconnecting';
     
     return `
-      <div class="member-chip ${isYou ? 'is-you' : ''}">
+      <div class="member-chip ${isYou ? 'is-you' : ''} ${isReconnecting ? 'reconnecting' : ''}">
         <div class="avatar size-sm">${getAvatarSVG(member.avatar)}</div>
-        <span class="name">${escapeHtml(member.name)}${isYou ? ' (you)' : ''}</span>
+        <span class="name">${escapeHtml(member.name)}${isYou ? ' (you)' : ''}${isReconnecting ? ' ⟳' : ''}</span>
         ${isAdmin ? '<span class="badge">Admin</span>' : ''}
       </div>
     `;
@@ -728,16 +752,23 @@ function renderMembers() {
   elements.sidebarMembers.innerHTML = state.members.map(member => {
     const isYou = member.id === state.memberId;
     const isAdmin = member.role === 'admin';
-    const showActions = state.isAdmin && !isYou && !isAdmin;
+    const isReconnecting = member.status === 'reconnecting';
+    const showActions = state.isAdmin && !isYou && !isAdmin && !isReconnecting;
     
     return `
-      <div class="sidebar-member" data-id="${member.id}">
+      <div class="sidebar-member ${isReconnecting ? 'reconnecting' : ''}" data-id="${member.id}">
         <div class="avatar">${getAvatarSVG(member.avatar)}</div>
         <div class="sidebar-member-info">
           <div class="sidebar-member-name">${escapeHtml(member.name)}${isYou ? ' (you)' : ''}</div>
-          <div class="sidebar-member-role">
-            ${isAdmin ? ICONS.crown + ' Admin' : ICONS.user + ' Member'}
-          </div>
+          ${isReconnecting ? `
+            <div class="sidebar-member-status">
+              <span class="dot"></span> Reconnecting...
+            </div>
+          ` : `
+            <div class="sidebar-member-role">
+              ${isAdmin ? ICONS.crown + ' Admin' : ICONS.user + ' Member'}
+            </div>
+          `}
         </div>
         ${showActions ? `
           <div class="sidebar-member-actions">
@@ -798,6 +829,28 @@ function showBanner(message, type = 'info') {
   setTimeout(() => {
     elements.chatBanner.classList.remove('visible');
   }, 3000);
+}
+
+// Connection status UI - shown during reconnection
+function showConnectionStatus() {
+  if (elements.connectionStatus) {
+    elements.connectionStatus.classList.add('visible');
+    elements.connectionStatus.querySelector('span').textContent = 'Reconnecting to server...';
+  }
+  // Disable chat input
+  if (elements.chatInputWrapper) {
+    elements.chatInputWrapper.classList.add('disabled');
+  }
+}
+
+function hideConnectionStatus() {
+  if (elements.connectionStatus) {
+    elements.connectionStatus.classList.remove('visible');
+  }
+  // Re-enable chat input
+  if (elements.chatInputWrapper) {
+    elements.chatInputWrapper.classList.remove('disabled');
+  }
 }
 
 function showTypingIndicator(names) {
