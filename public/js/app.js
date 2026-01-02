@@ -330,8 +330,9 @@ function initSocket() {
   state.socket = io(socketUrl, {
     transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 10,
     reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
     withCredentials: !!API_BASE_URL // Enable credentials for cross-origin
   });
 
@@ -339,7 +340,14 @@ function initSocket() {
     console.log('Connected to server');
     state.connected = true;
     
-    if (elements.loading.classList.contains('active')) {
+    // If we were in a room, try to rejoin (failover scenario)
+    if (state.roomId && state.memberId) {
+      console.log('Reconnecting to room after failover...');
+      state.socket.emit('room:rejoin', {
+        roomId: state.roomId,
+        memberId: state.memberId
+      });
+    } else if (elements.loading.classList.contains('active')) {
       handleDirectJoin();
     }
   });
@@ -347,6 +355,10 @@ function initSocket() {
   state.socket.on('disconnect', () => {
     console.log('Disconnected from server');
     state.connected = false;
+    // Show reconnecting indicator if in chat
+    if (elements.chat.classList.contains('active')) {
+      showBanner('Connection lost. Reconnecting...', 'warning');
+    }
   });
 
   // Room joined (both create and join)
@@ -357,25 +369,35 @@ function initSocket() {
       return;
     }
     
+    // Check if this is a rejoin (failover scenario)
+    const isRejoin = state.roomId === data.roomId && state.memberId === data.memberId;
+    
     state.roomId = data.roomId;
     state.memberId = data.memberId;
     state.room = data.room;
     state.isAdmin = data.isAdmin;
     state.members = data.members || [];
     
-    console.log('State updated:', { roomId: state.roomId, memberId: state.memberId, isAdmin: state.isAdmin });
+    console.log('State updated:', { roomId: state.roomId, memberId: state.memberId, isAdmin: state.isAdmin, isRejoin });
     
     updateWaitingRoom();
     
     // If room is already chatting, go directly to chat
     if (data.room?.status === 'chatting') {
       showScreen('chat');
-      // Load recent messages
-      if (data.recent && data.recent.length > 0) {
+      // Show reconnect banner if rejoining
+      if (isRejoin) {
+        showBanner('Reconnected!', 'success');
+      }
+      // Load recent messages (only if not a rejoin to avoid duplicates)
+      if (!isRejoin && data.recent && data.recent.length > 0) {
         data.recent.forEach(msg => addMessage(msg));
       }
     } else {
       showScreen('waiting');
+      if (isRejoin) {
+        showBanner('Reconnected!', 'success');
+      }
     }
   });
 
@@ -508,6 +530,7 @@ function initSocket() {
     console.log('Rejoin failed:', data.reason);
     resetRoomState();
     showScreen('home');
+    showError('Session expired. Please rejoin the room.');
   });
 
   // Error
