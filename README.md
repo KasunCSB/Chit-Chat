@@ -247,4 +247,4 @@ firebase deploy --only hosting
 
 ## License
 
-MIT — See LICENSE for details.
+See [License](LICENSE) for details.
