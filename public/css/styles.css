@@ -1517,6 +1517,7 @@ input[type="text"]::placeholder {
 }
 
 .sidebar-member {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-md);
@@ -1537,6 +1538,7 @@ input[type="text"]::placeholder {
 .sidebar-member-info {
   flex: 1;
   min-width: 0;
+  padding-right: 120px;
 }
 
 .sidebar-member-name {
@@ -1565,10 +1567,16 @@ input[type="text"]::placeholder {
   gap: var(--space-xs);
   opacity: 0;
   transition: opacity var(--duration-fast);
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .sidebar-member:hover .sidebar-member-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-member-actions button {

@@ -581,6 +581,39 @@ function initSocket() {
     addSystemMessage(`${data.name || data.memberName || 'A member'} is now an admin`);
   });
 
+  // Admin changed (handles both promotion and demotion across all clients)
+  const handleAdminChanged = (adminId, adminName) => {
+    if (!adminId) return;
+    if (state.room) {
+      state.room.adminId = adminId;
+    }
+
+    state.isAdmin = adminId === state.memberId;
+
+    const chatEl = document.getElementById('chat');
+    const waitingEl = document.getElementById('waiting');
+    if (state.isAdmin) {
+      chatEl?.classList.add('is-admin');
+      waitingEl?.classList.add('is-admin');
+    } else {
+      chatEl?.classList.remove('is-admin');
+      waitingEl?.classList.remove('is-admin');
+    }
+
+    // Ensure the member list + actions update immediately.
+    renderMembers();
+    updateWaitingRoom();
+  };
+
+  state.socket.on('room:admin-changed', (data) => {
+    handleAdminChanged(data?.adminId, data?.adminName);
+  });
+
+  // Back-compat event name
+  state.socket.on('admin:changed', (data) => {
+    handleAdminChanged(data?.newAdminId, data?.newAdminName);
+  });
+
   // Room closed
   state.socket.on('room:closed', () => {
     showOverlay('closed');

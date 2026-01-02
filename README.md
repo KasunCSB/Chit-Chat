@@ -1,4 +1,4 @@
-# ChitChat
+# Chit-Chat
 
 > Temporary chat rooms with human-readable passphrases
 

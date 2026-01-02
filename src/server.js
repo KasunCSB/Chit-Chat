@@ -192,8 +192,7 @@ app.get('/api/server-info', async (req, res) => {
 
   let activeRooms = 0;
   try {
-    const keys = await redis.keys('room:*:meta');
-    activeRooms = keys.length;
+    activeRooms = await redis.scard(keys.activeRooms());
   } catch (e) {}
 
   res.json({
@@ -204,6 +203,7 @@ app.get('/api/server-info', async (req, res) => {
     redis: { connected: redisOk, latency: redisLatency },
     clients: io.engine.clientsCount || 0,
     rooms: activeRooms,
+    activeRooms,
   });
 });
 
