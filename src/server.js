@@ -499,7 +499,7 @@ function stopPresenceHeartbeat(socket) {
   }
 }
 
-async function markMemberDisconnected(roomId, memberId, reason = 'disconnect') {
+async function markMemberDisconnected(roomId, memberId, reason = 'disconnect', expectedOdId = null) {
   const existing = await redis.hget(keys.members(roomId), memberId);
   if (!existing) return;
 
@@ -511,6 +511,12 @@ async function markMemberDisconnected(roomId, memberId, reason = 'disconnect') {
   }
 
   if (!member || !member.id) return;
+
+  // In HA/failover, an old socket can disconnect after a new socket has already rejoined.
+  // Prevent the old disconnect from clobbering the newer connection state.
+  if (expectedOdId && member.odId && member.odId !== expectedOdId) {
+    return;
+  }
   if (member.disconnectedAt && !member.odId) return; // already disconnected
 
   member.disconnectedAt = nowMs();
@@ -524,6 +530,28 @@ async function markMemberDisconnected(roomId, memberId, reason = 'disconnect') {
   await refreshRoomTTL(roomId);
 
   console.log(`[${SERVER_ID}] Marked member disconnected (${reason}) room=${roomId} member=${memberId}`);
+}
+
+async function markMemberConnected(roomId, memberId, socketId) {
+  const existing = await redis.hget(keys.members(roomId), memberId);
+  if (!existing) return;
+
+  let member;
+  try {
+    member = JSON.parse(existing);
+  } catch {
+    return;
+  }
+
+  if (!member || !member.id) return;
+  const needsUpdate = member.odId !== socketId || member.disconnectedAt;
+  if (!needsUpdate) return;
+
+  member.odId = socketId;
+  member.disconnectedAt = null;
+  await redis.hset(keys.members(roomId), memberId, JSON.stringify(member));
+  await redis.zrem(keys.disconnected(roomId), memberId);
+  await setPresence(roomId, memberId);
 }
 
 // Helper: Get all members (with connection status for UI)
@@ -1038,6 +1066,10 @@ io.on('connection', (socket) => {
         return ack?.({ ok: false, error: 'Invalid member' });
       }
 
+      // If we got here, this socket is actively sending messages; ensure the member is marked connected.
+      await markMemberConnected(roomId, memberId, socket.id);
+      startPresenceHeartbeat(socket, roomId, memberId);
+
       senderName = member.name || senderName;
       senderAvatar = member.avatar || null;
 
@@ -1093,6 +1125,9 @@ io.on('connection', (socket) => {
       return;
     }
 
+    await markMemberConnected(roomId, memberId, socket.id);
+    startPresenceHeartbeat(socket, roomId, memberId);
+
     await redis.hset(keys.typing(roomId), memberId, JSON.stringify({ name: memberName, ts: nowMs() }));
     // Ensure the typing key has TTL set (in case it's the first entry)
     await redis.expire(keys.typing(roomId), ROOM_TTL_SECONDS);
@@ -1116,6 +1151,9 @@ io.on('connection', (socket) => {
       socket.data = {};
       return;
     }
+
+    await markMemberConnected(roomId, memberId, socket.id);
+    startPresenceHeartbeat(socket, roomId, memberId);
 
     await redis.hdel(keys.typing(roomId), memberId);
     await broadcastTyping(roomId);
@@ -1358,7 +1396,7 @@ io.on('connection', (socket) => {
       if (!roomId || !memberId) return;
 
       await trackActiveRoom(roomId);
-      await markMemberDisconnected(roomId, memberId, 'socket-disconnect');
+      await markMemberDisconnected(roomId, memberId, 'socket-disconnect', socket.id);
       await broadcastMembers(roomId);
       await broadcastTyping(roomId);
     } catch (err) {

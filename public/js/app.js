@@ -256,6 +256,7 @@ const state = {
   room: null,
   isAdmin: false,
   members: [],
+  lastSeq: 0,
   typingTimeout: null,
   pendingAction: null, // 'create' | 'join' | joinCode
   pendingJoinQuery: null // passphrase or shortCode to join
@@ -442,9 +443,23 @@ function initSocket() {
       if (isRejoin) {
         showBanner('Reconnected!', 'success');
       }
-      // Load recent messages (only if not a rejoin to avoid duplicates)
-      if (!isRejoin && data.recent && data.recent.length > 0) {
-        data.recent.forEach(msg => addMessage(msg));
+      // Load recent messages (also on rejoin to catch up)
+      if (data.recent && data.recent.length > 0) {
+        data.recent.forEach(msg => {
+          const msgSeq = Number(msg?.seq || 0);
+          if (msgSeq && state.lastSeq && msgSeq <= state.lastSeq) return;
+          if (msg?.id && seenMessages.has(msg.id)) return;
+
+          if (msg?.id) {
+            seenMessages.add(msg.id);
+            if (seenMessages.size > 200) {
+              const arr = Array.from(seenMessages);
+              arr.slice(0, 100).forEach(id => seenMessages.delete(id));
+            }
+          }
+
+          addMessage(msg);
+        });
       }
     } else {
       showScreen('waiting');
@@ -819,6 +834,11 @@ function renderMembers() {
 // ==========================================================================
 
 function addMessage(data) {
+  const seq = Number(data?.seq || 0);
+  if (seq && (!state.lastSeq || seq > state.lastSeq)) {
+    state.lastSeq = seq;
+  }
+
   const isOwn = data.senderId === state.memberId;
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isOwn ? 'own' : ''}`;
