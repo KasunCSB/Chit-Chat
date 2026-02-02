@@ -9,7 +9,7 @@
   
   // Primary: Firebase frontend → backend API
   if (host === 'chit-chat-g7.web.app' || host === 'chit-chat-g7.firebaseapp.com') {
-    window.CHITCHAT_API_URL = 'https://cc.kasunc.live';
+    window.CHITCHAT_API_URL = 'https://cc.kasunc.uk';
   }
   // Fallback: Direct backend access (serves both FE + BE)
   // Includes: cc.kasunc.live, localhost, any direct IP access
