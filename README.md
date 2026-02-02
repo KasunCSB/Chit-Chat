@@ -27,8 +27,8 @@
 
 ## Live Demo
 
-- **Primary**: [chit-chat-g7.web.app](https://chit-chat-g7.web.app) (Firebase + backend)
-- **Fallback**: [cc.kasunc.live](https://cc.kasunc.live) (Direct backend)
+- **Primary**: [cc.kasunc.uk](https://cc.kasunc.uk)
+- **Fallback**: [chit-chat-g7.web.app](https://chit-chat-g7.web.app)
 
 ## Architecture
 
@@ -43,11 +43,11 @@
                     │ Primary                          Fallback   │
                     ▼                                             ▼
           ┌─────────────────┐                           ┌─────────────────┐
-          │    Firebase     │                           │  cc.kasunc.live │
-          │    Hosting      │                           │   (Direct)      │
-          │   (Frontend)    │                           └────────┬────────┘
-          └────────┬────────┘                                    │
-                   │ API calls                                   │
+          │   cc.kasunc.uk  │                           │    Firebase     │
+          │   (Backend)     │                           │    Hosting      │
+          │                 │                           │   (Frontend)    │
+          └────────┬────────┘                           └────────┬────────┘
+                   │                                             │
                    └───────────────────────┼─────────────────────┘
                                            │
                                            ▼
@@ -91,8 +91,8 @@
 
 | URL | Path | Use Case |
 |-----|------|----------|
-| `chit-chat-g7.web.app` | Firebase → API to cc.kasunc.live | Primary                |
-| `cc.kasunc.live` | Direct to backend (serves FE + API) | Fallback if Firebase down |
+| `cc.kasunc.uk` | Direct to backend (serves FE + API) | Primary                |
+| `chit-chat-g7.web.app` | Firebase frontend | Fallback |
 
 ## Quick Start
 
@@ -251,8 +251,8 @@ pm2 save
 pm2 startup
 
 # Configure nginx
-sudo cp nginx-oracle.conf /etc/nginx/sites-available/cc.kasunc.live
-sudo ln -s /etc/nginx/sites-available/cc.kasunc.live /etc/nginx/sites-enabled/
+sudo cp nginx-oracle.conf /etc/nginx/sites-available/cc.kasunc.uk
+sudo ln -s /etc/nginx/sites-available/cc.kasunc.uk /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -266,7 +266,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | App Servers | 3x processes via PM2 (ports 3000-3002) |
 | Session Store | Redis (localhost, AOF persistence) |
 | Compute | Oracle Cloud Always Free (AMD VM) |
-| Domain | `cc.kasunc.live` (Cloudflare DNS) |
+| Domain | `cc.kasunc.uk` (Cloudflare DNS) |
 
 **Cost:** $0/month (100% free)
 
